@@ -1,6 +1,6 @@
 # `go.husin.dev/x/heap`
 
-## [Documentation](https://pkg.go.dev/go.husin.dev/x/heap)
+[![Go Reference](https://pkg.go.dev/badge/go.husin.dev/x/heap.svg)](https://pkg.go.dev/go.husin.dev/x/heap)
 
 Go stdlib (as of 1.18beta1) provides `container/heap` package which can be used to create heap data structure.
 Unfortunately, as it was written prior to generics being introduced, the ergonomics feel a little funky.
