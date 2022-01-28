@@ -1,5 +1,7 @@
 package heap
 
+// Heap is a struct which wraps the slice of provided type and internally
+// maintains integrity of heap datastructure.
 type Heap[T any] struct {
 	queue    []T
 	less     func(left, right T) bool
