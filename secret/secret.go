@@ -2,6 +2,7 @@ package secret
 
 import (
 	"encoding/base64"
+	"fmt"
 )
 
 type Bytes struct {
@@ -9,8 +10,12 @@ type Bytes struct {
 	secret        []byte
 }
 
-func NewBytes(authenticator *Authenticator, secret []byte) *Bytes {
-	return &Bytes{
+func NewBytes(secret []byte) Bytes {
+	return Bytes{secret: secret}
+}
+
+func NewBytesWithAuth(authenticator *Authenticator, secret []byte) Bytes {
+	return Bytes{
 		authenticator: authenticator,
 		secret:        secret,
 	}
@@ -21,8 +26,17 @@ func NewBytes(authenticator *Authenticator, secret []byte) *Bytes {
 // for JSON keys.
 // RawURLEncoding needs to be used to ensure that results are not padded, otherwise
 // it might cause misalignment on encrypt-decrypt process.
-func (s *Bytes) MarshalText() ([]byte, error) {
-	ciphertext, err := s.authenticator.EncryptData(s.secret)
+// MarshalText will use the attached authenticator if provided, otherwise will
+// fallback to globalAuth, configured by SetGlobal
+func (s Bytes) MarshalText() ([]byte, error) {
+	auth := globalAuth
+	if s.authenticator != nil {
+		auth = s.authenticator
+	}
+	if auth == nil {
+		return nil, fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
+	}
+	ciphertext, err := auth.Encrypt(s.secret)
 	if err != nil {
 		return nil, err
 	}
@@ -31,12 +45,21 @@ func (s *Bytes) MarshalText() ([]byte, error) {
 	return b64, nil
 }
 
+// UnmarshalText will use the attached authenticator if provided, otherwise will
+// fallback to globalAuth, configured by SetGlobal
 func (s *Bytes) UnmarshalText(b64 []byte) error {
 	ciphertext := make([]byte, base64.RawURLEncoding.DecodedLen(len(b64)))
 	if _, err := base64.RawURLEncoding.Decode(ciphertext, b64); err != nil {
 		return err
 	}
-	secret, err := s.authenticator.DecryptData(ciphertext)
+	auth := globalAuth
+	if s.authenticator != nil {
+		auth = s.authenticator
+	}
+	if auth == nil {
+		return fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
+	}
+	secret, err := auth.Decrypt(ciphertext)
 	if err != nil {
 		return err
 	}
@@ -44,28 +67,34 @@ func (s *Bytes) UnmarshalText(b64 []byte) error {
 	return nil
 }
 
-func (s *Bytes) SetValue(b []byte) {
+func (s Bytes) SetValue(b []byte) {
 	s.secret = b
 }
 
-func (s *Bytes) Value() []byte {
+func (s Bytes) Value() []byte {
 	return s.secret
 }
 
 type String struct {
-	*Bytes
+	Bytes
 }
 
-func NewString(authenticator *Authenticator, secret string) *String {
-	return &String{
-		Bytes: NewBytes(authenticator, []byte(secret)),
+func NewString(secret string) String {
+	return String{
+		Bytes: NewBytes([]byte(secret)),
 	}
 }
 
-func (s *String) SetValue(str string) {
+func NewStringWithAuth(authenticator *Authenticator, secret string) String {
+	return String{
+		Bytes: NewBytesWithAuth(authenticator, []byte(secret)),
+	}
+}
+
+func (s String) SetValue(str string) {
 	s.secret = []byte(str)
 }
 
-func (s *String) Value() string {
+func (s String) Value() string {
 	return string(s.secret)
 }

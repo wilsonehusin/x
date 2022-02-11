@@ -4,7 +4,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 )
+
+var globalAuth *Authenticator
 
 type Authenticator struct {
 	authenticator cipher.AEAD
@@ -22,12 +25,29 @@ func NewAuthenticatorAESGCM(key []byte) (*Authenticator, error) {
 	return &Authenticator{authenticator: aead}, nil
 }
 
-func (a *Authenticator) EncryptData(secret []byte) ([]byte, error) {
+func SetGlobal(a *Authenticator) {
+	globalAuth = a
+}
+
+func Encrypt(secret []byte) ([]byte, error) {
+	if globalAuth == nil {
+		return nil, fmt.Errorf("unable to encrypt: global authenticator is not set (use SetGlobal)")
+	}
+	return globalAuth.Encrypt(secret)
+}
+
+func Decrypt(ciphertext []byte) ([]byte, error) {
+	if globalAuth == nil {
+		return nil, fmt.Errorf("unable to decrypt: global authenticator is not set (use SetGlobal)")
+	}
+	return globalAuth.Decrypt(ciphertext)
+}
+
+func (a *Authenticator) Encrypt(secret []byte) ([]byte, error) {
 	// NIST: For GCM a 12 byte IV is strongly suggested as other IV lengths will
 	// require additional calculations.
 	// crypto/cipher: Never use more than 2^32 random nonces with a given key
 	// because of the risk of a repeat.
-	// TODO: have a plan once 4 billion secrets have been stored?
 	nonce := make([]byte, 12)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
@@ -35,7 +55,7 @@ func (a *Authenticator) EncryptData(secret []byte) ([]byte, error) {
 	return a.authenticator.Seal(nonce, nonce, secret, nil), nil
 }
 
-func (a *Authenticator) DecryptData(data []byte) ([]byte, error) {
+func (a *Authenticator) Decrypt(data []byte) ([]byte, error) {
 	nonceSize := a.authenticator.NonceSize()
 	nonce := data[:nonceSize]
 	ciphertext := data[nonceSize:]

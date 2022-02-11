@@ -31,14 +31,14 @@ func TestBytesEncodeDecodeJSON(t *testing.T) {
 	}
 
 	for _, line := range lines {
-		src := NewBytes(auth, []byte(line))
+		src := NewBytesWithAuth(auth, []byte(line))
 		raw, err := json.Marshal(src)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("ciphertext (json string): %s", raw)
-		dst := NewBytes(auth, nil)
-		if err := json.Unmarshal(raw, dst); err != nil {
+		dst := NewBytesWithAuth(auth, nil)
+		if err := json.Unmarshal(raw, &dst); err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(src.Value(), dst.Value()) {
@@ -55,14 +55,14 @@ func TestStringEncodeDecodeJSON(t *testing.T) {
 		`you wouldn't get this from any other guy`,
 	}
 	for _, line := range lines {
-		src := NewString(auth, line)
+		src := NewStringWithAuth(auth, line)
 		raw, err := json.Marshal(src)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("ciphertext (json string): %s", raw)
-		dst := NewString(auth, "")
-		if err := json.Unmarshal(raw, dst); err != nil {
+		dst := NewStringWithAuth(auth, "")
+		if err := json.Unmarshal(raw, &dst); err != nil {
 			t.Fatal(err)
 		}
 		if src.Value() != dst.Value() {
@@ -74,13 +74,13 @@ func TestStringEncodeDecodeJSON(t *testing.T) {
 func TestStructWithStringEncodeDecodeJSON(t *testing.T) {
 	auth := getAuth()
 
-	type clientConfig struct {
-		ClientID, ClientSecret *String
+	type fakeClientConfig struct {
+		ClientID, ClientSecret String
 	}
 
-	src := &clientConfig{
-		ClientID:     NewString(auth, "this-is-client-id"),
-		ClientSecret: NewString(auth, "this-is-client-secret"),
+	src := &fakeClientConfig{
+		ClientID:     NewStringWithAuth(auth, "this-is-client-id"),
+		ClientSecret: NewStringWithAuth(auth, "this-is-client-secret"),
 	}
 
 	raw, err := json.Marshal(src)
@@ -89,9 +89,9 @@ func TestStructWithStringEncodeDecodeJSON(t *testing.T) {
 	}
 	t.Logf("ciphertext (json object): %s", raw)
 
-	dst := &clientConfig{
-		ClientID:     NewString(auth, ""),
-		ClientSecret: NewString(auth, ""),
+	dst := &fakeClientConfig{
+		ClientID:     NewStringWithAuth(auth, ""),
+		ClientSecret: NewStringWithAuth(auth, ""),
 	}
 	if err := json.Unmarshal(raw, dst); err != nil {
 		t.Fatal(err)
@@ -102,4 +102,36 @@ func TestStructWithStringEncodeDecodeJSON(t *testing.T) {
 	if src.ClientSecret.Value() != dst.ClientSecret.Value() {
 		t.Fatalf("unequal:\n\tsrc: %+v\n\tdst: %+v\n", src.ClientSecret.Value(), dst.ClientSecret.Value())
 	}
+}
+
+func TestStructWithStringEncodeDecodeJSONGlobalAuth(t *testing.T) {
+	auth := getAuth()
+	SetGlobal(auth)
+
+	type fakeClientConfig struct {
+		ClientID, ClientSecret String
+	}
+
+	src := &fakeClientConfig{
+		ClientID:     NewString("this-is-client-id"),
+		ClientSecret: NewString("this-is-client-secret"),
+	}
+
+	raw, err := json.Marshal(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("ciphertext (json object): %s", raw)
+
+	dst := &fakeClientConfig{}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		t.Fatal(err)
+	}
+	if src.ClientID.Value() != dst.ClientID.Value() {
+		t.Fatalf("unequal:\n\tsrc: %+v\n\tdst: %+v\n", src.ClientID.Value(), dst.ClientID.Value())
+	}
+	if src.ClientSecret.Value() != dst.ClientSecret.Value() {
+		t.Fatalf("unequal:\n\tsrc: %+v\n\tdst: %+v\n", src.ClientSecret.Value(), dst.ClientSecret.Value())
+	}
+	SetGlobal(nil)
 }
