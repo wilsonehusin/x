@@ -1,7 +1,6 @@
 package secret
 
 import (
-	"encoding/base64"
 	"fmt"
 )
 
@@ -36,22 +35,16 @@ func (s Bytes) MarshalText() ([]byte, error) {
 	if auth == nil {
 		return nil, fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
 	}
-	ciphertext, err := auth.Encrypt(s.secret)
+	ciphertext, err := auth.EncryptBase64(s.secret)
 	if err != nil {
 		return nil, err
 	}
-	b64 := make([]byte, base64.RawURLEncoding.EncodedLen(len(ciphertext)))
-	base64.RawURLEncoding.Encode(b64, ciphertext)
-	return b64, nil
+	return ciphertext, nil
 }
 
 // UnmarshalText will use the attached authenticator if provided, otherwise will
 // fallback to globalAuth, configured by SetGlobal
 func (s *Bytes) UnmarshalText(b64 []byte) error {
-	ciphertext := make([]byte, base64.RawURLEncoding.DecodedLen(len(b64)))
-	if _, err := base64.RawURLEncoding.Decode(ciphertext, b64); err != nil {
-		return err
-	}
 	auth := globalAuth
 	if s.authenticator != nil {
 		auth = s.authenticator
@@ -59,7 +52,7 @@ func (s *Bytes) UnmarshalText(b64 []byte) error {
 	if auth == nil {
 		return fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
 	}
-	secret, err := auth.Decrypt(ciphertext)
+	secret, err := auth.DecryptBase64(b64)
 	if err != nil {
 		return err
 	}
