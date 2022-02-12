@@ -32,8 +32,8 @@ By using this library, one can define their `struct` as:
 
 ```go
 type OAuthConfig struct {
-  ClientID      *secret.String
-  ClientSecret  *secret.String
+  ClientID      secret.String
+  ClientSecret  secret.String
 }
 ```
 
@@ -58,17 +58,6 @@ fmt.Println(clientID.Value())
 ```
 
 ## Caveats
-
-### Unmarshaling
-
-Upon unmarshaling, `Authentication` must already be known, i.e.:
-
-```go
-dst := OAuthConfig{ClientID: NewString(auth, ""), ClientSecret: NewString(auth, "")}
-if err := json.Unmarshal(rawData, &dst); err != nil {
-  panic(err)
-}
-```
 
 ### Nonce (or "why Marshal() calls are not idempotent?")
 
