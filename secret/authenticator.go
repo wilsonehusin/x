@@ -3,15 +3,29 @@ package secret
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"hash"
+)
+
+var (
+	ErrHMACMismatch = errors.New("hmac mismatch")
 )
 
 var globalAuth *Authenticator
 
+const (
+	// Following Content Security Policy spec for nonce size: 128 bits
+	hmacNonceLength = 16
+)
+
 type Authenticator struct {
 	authenticator cipher.AEAD
+	hmac          hash.Hash
 }
 
 func NewAuthenticatorAESGCM(key []byte) (*Authenticator, error) {
@@ -23,7 +37,8 @@ func NewAuthenticatorAESGCM(key []byte) (*Authenticator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Authenticator{authenticator: aead}, nil
+	h := hmac.New(sha256.New, key)
+	return &Authenticator{authenticator: aead, hmac: h}, nil
 }
 
 func SetGlobal(a *Authenticator) {
@@ -53,6 +68,23 @@ func Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("unable to decrypt: global authenticator is not set (use SetGlobal)")
 	}
 	return globalAuth.Decrypt(ciphertext)
+}
+
+// HMAC creates a message authentication code (MAC) for a given message with
+// nonce prefix using global authenticator.
+func HMAC(msg []byte) ([]byte, error) {
+	if globalAuth == nil {
+		return nil, fmt.Errorf("unable to calculate HMAC: global authenticator is not set (use SetGlobal)")
+	}
+	return globalAuth.HMAC(msg)
+}
+
+// HMACCheck validates if a message and its MAC is consistent using global authenticator.
+func HMACCheck(msg, expected []byte) error {
+	if globalAuth == nil {
+		return fmt.Errorf("unable to calculate HMAC: global authenticator is not set (use SetGlobal)")
+	}
+	return globalAuth.HMACCheck(msg, expected)
 }
 
 // DecryptBase64 is similar to Decrypt, except it takes input value which was Base64-encoded,
@@ -106,4 +138,48 @@ func (a *Authenticator) DecryptBase64(b64 []byte) ([]byte, error) {
 		return nil, err
 	}
 	return a.Decrypt(ciphertext)
+}
+
+// HMAC creates a message authentication code (MAC) for a given message with nonce prefix.
+func (a *Authenticator) HMAC(msg []byte) ([]byte, error) {
+	nonce := make([]byte, hmacNonceLength)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+
+	return a.calcHMAC(nonce, msg)
+}
+
+// HMACCheck validates if a message and its MAC is consistent.
+func (a *Authenticator) HMACCheck(msg, expected []byte) error {
+	// Nonce should be copied over, otherwise it may overwrite expected
+	// when append is called in calcHMAC
+	nonce := make([]byte, hmacNonceLength)
+	n := copy(nonce, expected[:hmacNonceLength])
+	if n != hmacNonceLength {
+		return fmt.Errorf("misaligned nonce copy: expected %d, actual %d", hmacNonceLength, n)
+	}
+
+	calculatedMAC, err := a.calcHMAC(nonce, msg)
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal(calculatedMAC, expected) {
+		return ErrHMACMismatch
+	}
+	return nil
+}
+
+func (a *Authenticator) calcHMAC(nonce, msg []byte) ([]byte, error) {
+	defer a.hmac.Reset()
+
+	n, err := a.hmac.Write(append(nonce, msg...))
+	if err != nil || n == 0 {
+		return nil, fmt.Errorf("unable to write to hmac: %w", err)
+	}
+
+	sum := a.hmac.Sum(nil)
+
+	result := append(nonce, sum...)
+	return result, nil
 }

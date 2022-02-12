@@ -6,22 +6,6 @@ import (
 	"testing"
 )
 
-const (
-	testStringKey = "955880d5f4f43c66751848c06fedb78e420995b373418dcfb856ca559deb71c3"
-)
-
-func getAuth() *Authenticator {
-	key, err := KeyFromString(testStringKey)
-	if err != nil {
-		panic(err)
-	}
-	auth, err := NewAuthenticatorAESGCM(key)
-	if err != nil {
-		panic(err)
-	}
-	return auth
-}
-
 func TestBytesEncodeDecodeJSON(t *testing.T) {
 	auth := getAuth()
 
