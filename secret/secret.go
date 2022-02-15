@@ -60,6 +60,37 @@ func (s *Bytes) UnmarshalText(b64 []byte) error {
 	return nil
 }
 
+func (s Bytes) MarshalBinary() ([]byte, error) {
+	auth := globalAuth
+	if s.authenticator != nil {
+		auth = s.authenticator
+	}
+	if auth == nil {
+		return nil, fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
+	}
+	ciphertext, err := auth.Encrypt(s.secret)
+	if err != nil {
+		return nil, err
+	}
+	return ciphertext, nil
+}
+
+func (s *Bytes) UnmarshalBinary(b []byte) error {
+	auth := globalAuth
+	if s.authenticator != nil {
+		auth = s.authenticator
+	}
+	if auth == nil {
+		return fmt.Errorf("missing authenticator: initialize authenticator or use SetGlobal")
+	}
+	secret, err := auth.Decrypt(b)
+	if err != nil {
+		return err
+	}
+	s.secret = secret
+	return nil
+}
+
 func (s Bytes) SetValue(b []byte) {
 	s.secret = b
 }
